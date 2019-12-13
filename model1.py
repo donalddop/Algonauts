@@ -10,10 +10,15 @@ from sklearn.naive_bayes import GaussianNB
 from PIL import Image
 from itertools import combinations
 
+import testSub_fmri
+import testSub_meg
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+import glob
 
+import argparse
+import zipfile
 import h5py
 import math
 import os
@@ -70,12 +75,66 @@ def perceptual_model(dataset, folder, sigma):
     rdm = rdm / rdm.max()
     return edges, rdm
 
-def categorical_model(dataset, folder):
-    gnb = GaussianNB()
-    activations = loadmat("vgg_fc8_fmri.mat")
-    print(type(activations))
+def save_rdm(rdm, filename):
+    #saving RDMs in challenge submission format
+    rdm_fmri={}
+    rdm_meg={}
+    rdm_fmri['EVC_RDMs'] = rdm
+    rdm_fmri['IT_RDMs'] = rdm
+    rdm_meg['MEG_RDMs_late'] = rdm
+    rdm_meg['MEG_RDMs_early'] = rdm
+    io.savemat(filename + '_fmri.mat',rdm_fmri)
+    io.savemat(filename + '_meg.mat',rdm_meg)
 
-    # y_pred = gnb.fit(iris.data, iris.target).predict(iris.data)
+    # #creating zipped file for submission
+    # zipfmri = zipfile.ZipFile(RDM_filename_fmri_zip, 'w')
+    # zipmeg = zipfile.ZipFile(RDM_filename_meg_zip, 'w')
+    # os.chdir(RDM_dir)
+    # zipfmri.write('submit_fmri.mat')
+    # zipmeg.write('submit_meg.mat')
+    # zipfmri.close()
+    # zipmeg.close()
+
+def categorical_model(dataset, folder):
+    # Create the classifier
+    gnb = GaussianNB()
+    # Gather activations per image in an array: This will be our data
+    training_files = glob.iglob('Feature_Extract/feats/92images_feats/alexnet/*.mat')
+    test_image = loadmat('Feature_Extract/feats/78images_feats/alexnet/image_01.mat')
+    num_images = 92
+    num_features = 1000
+    X_test = np.empty((num_images, num_features))
+    row = 0
+    for file in training_files:
+        current = loadmat(file)
+        X_test[row] = current['fc8']
+        row += 1
+    # Label the training images
+    subs = {
+        1 : 'Hands',
+        2 : 'Objects-Scenes',
+        3 : 'Humans',
+        4 : 'Faces',
+        5 : 'Animals',
+        6 : 'Animal Faces',
+        7 : 'Monkey Faces',
+        8 : 'Fruits-Vegetables',
+    }
+    y_test = np.array([1,2,1,3,2,3,3,1,2,3,
+                       1,1,4,4,4,4,4,4,4,4,
+                       4,4,4,4,5,5,5,5,5,5,
+                       5,5,5,5,5,5,6,6,7,7,
+                       6,6,7,7,6,6,6,7,8,8,
+                       8,2,8,8,8,8,2,8,8,8,
+                       2,2,8,8,8,2,2,8,8,8,
+                       2,2,2,2,2,2,2,2,2,2,
+                       2,2,2,2,2,2,2,2,2,2,
+                       2,2])
+    y_test = [ subs.get(item,item) for item in y_test ]
+    # Train the classifier
+    y_pred = gnb.fit(X_test, y_test).predict(X_test)
+    print("Number of mislabeled points out of a total %d points : %d" % (X_test.shape[0], (y_test != y_pred).sum()))
+    print(gnb.fit(X_test, y_test).predict(test_image['fc8']))
 
 def load_data(folder, scale=100):
     # Define rescale transform to (default) 100x100 pixels
@@ -100,6 +159,7 @@ if __name__ == "__main__":
     # Perceptual model
     # print("Running perceptual model on: ", train_folder)
     # p_edges, p_rdm = perceptual_model(train_dataset, training_folder, 1)
+    # save_rdm(p_rdm, 'p_rdm')
     # plt.figure()
     # plt.pcolor(p_rdm)
     # plt.colorbar()
@@ -107,14 +167,12 @@ if __name__ == "__main__":
 
     # Categorical model
     # Show the classes and indexes
-    print(train_dataset.class_to_idx)
+    # print(train_dataset.class_to_idx)
     categorical_model(train_dataset, training_folder)
-    # val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=32,
-                                                # num_workers=4, shuffle=True)
 
-    # Get pretrained model using torchvision.models as models library
-    # model = models.densenet161(pretrained=True)
+    # Evaluate rdms
+    # testSub_fmri.test_fmri_submission('Training_Data/92_Image_Set/target_fmri.mat', 'p_rdm_fmri.mat')
+    # testSub_meg.test_meg_submission('Training_Data/92_Image_Set/target_meg.mat', 'p_rdm_meg.mat')
 
-    # Turn off training for their parameters
-    # for param in model.parameters():
-    #     param.requires_grad = False
+    # testSub_fmri.test_fmri_submission('Training_Data/92_Image_Set/target_fmri.mat', 'Feature_Extract/rdms/92images_rdms/resnet/pearson/fc/submit_fmri.mat')
+    # testSub_fmri.test_fmri_submission('Training_Data/92_Image_Set/target_fmri.mat', 'Feature_Extract/rdms/92images_rdms/alexnet/pearson/conv1/submit_fmri.mat')
