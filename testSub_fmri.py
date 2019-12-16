@@ -61,8 +61,8 @@ def sq(x):
 
 #defines the spearman correlation
 def spearman(model_rdm, rdms):
-    print(type(model_rdm))
-    print(np.shape(rdms))
+    # print(type(model_rdm))
+    # print(np.shape(rdms))
     model_rdm_sq = sq(model_rdm)
     return [stats.spearmanr(sq(rdm), model_rdm_sq)[0] for rdm in rdms]
 
@@ -92,11 +92,12 @@ def test_fmri_submission(target_file, submit_file):
     evc_percentNC = ((out['EVC_RDMs'][0])/nc92_EVC_R2)*100.      #evc percent of noise ceiling
     it_percentNC = ((out['IT_RDMs'][0])/nc92_IT_R2)*100.         #it percent of noise ceiling
     score_percentNC = ((out['score'])/nc92_avg_R2)*100.      #avg (score) percent of noise ceiling
-    print('=' * 20)
-    print('fMRI results:')
-    print('Squared correlation of model to EVC (R**2): {}'.format(out['EVC_RDMs'][0]), ' Percentage of noise ceiling: {}'.format(evc_percentNC),'%', '  and significance: {}'.format(out['EVC_RDMs'][1]))
-    print('Squared correlation of model to IT (R**2): {}'.format(out['IT_RDMs'][0]), '  Percentage of noise ceiling: {}'.format(it_percentNC),'%', '  and significance: {}'.format(out['IT_RDMs'][1]))
-    print('SCORE (average of the two correlations): {}'.format(out['score']), '  Percentage of noise ceiling: {}'.format(score_percentNC),'%')
+    # print('=' * 20)
+    # print('fMRI results:')
+    # print('Squared correlation of model to EVC (R**2): {}'.format(out['EVC_RDMs'][0]), ' Percentage of noise ceiling: {}'.format(evc_percentNC),'%', '  and significance: {}'.format(out['EVC_RDMs'][1]))
+    # print('Squared correlation of model to IT (R**2): {}'.format(out['IT_RDMs'][0]), '  Percentage of noise ceiling: {}'.format(it_percentNC),'%', '  and significance: {}'.format(out['IT_RDMs'][1]))
+    # print('SCORE (average of the two correlations): {}'.format(out['score']), '  Percentage of noise ceiling: {}'.format(score_percentNC),'%')
+    return score_percentNC
 
 
 if __name__ == '__main__':
