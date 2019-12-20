@@ -92,7 +92,7 @@ def test_meg_submission(target_file, submit_file):
     # print('Squared correlation of model to earlier time interval (R**2): {}'.format(out['MEG_RDMs_early'][0]), ' Percentage of noise ceiling: {}'.format(early_percentNC),'%', '  and significance: {}'.format(out['MEG_RDMs_early'][1]))
     # print('Squared correlation of model to later time interval (R**2): {}'.format(out['MEG_RDMs_late'][0]), '  Percentage of noise ceiling: {}'.format(late_percentNC),'%', '  and significance: {}'.format(out['MEG_RDMs_late'][1]))
     # print('SCORE (average of the two correlations): {}'.format(out['score']), '  Percentage of noise ceiling: {}'.format(score_percentNC),'%')
-    return score_percentNC
+    return early_percentNC, late_percentNC
 
 if __name__ == '__main__':
     test_meg_submission()
