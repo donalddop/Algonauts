@@ -63,10 +63,22 @@ def spearman(model_rdm, rdms):
     model_rdm_sq = sq(model_rdm)
     return [stats.spearmanr(sq(rdm), model_rdm_sq)[0] for rdm in rdms]
 
+def cosine(model_rdm, rdms):
+    output = []
+    model_rdm_sq = sq(model_rdm)
+    for rdm in rdms:
+        target_rdm_sq = sq(rdm)
+        product = np.dot(target_rdm_sq, model_rdm_sq)
+        norm_1 = np.linalg.norm(target_rdm_sq)
+        norm_2 = np.linalg.norm(model_rdm_sq)
+        output.append(product / (norm_1 * norm_2))
+    return output
+
 
 #computes spearman correlation (R) and R^2, and ttest for p-value
 def meg_rdm(model_rdm, meg_rdms):
     corr = np.mean([spearman(model_rdm, rdms) for rdms in meg_rdms], 1)
+    # corr = np.mean([cosine(model_rdm, rdms) for rdms in meg_rdms], 1)
     corr_squared = np.square(corr)
     return np.mean(corr_squared), stats.ttest_1samp(corr_squared, 0)[1]
 
@@ -84,15 +96,18 @@ def test_meg_submission(target_file, submit_file):
     target = load(target_file)
     submit = load(submit_file)
     out = evaluate_meg(submit, target)
-    early_percentNC = ((out['MEG_RDMs_early'][0])/nc118_early_R2)*100.       #early percent of noise ceiling
-    late_percentNC = ((out['MEG_RDMs_late'][0])/nc118_late_R2)*100.           #late percent of noise ceiling
-    score_percentNC = ((out['score'])/nc118_avg_R2)*100.                       #avg (score) percent of noise ceiling
+    early_percentNC = ((out['MEG_RDMs_early'][0])/nc92_early_R2)*100.       #early percent of noise ceiling
+    late_percentNC = ((out['MEG_RDMs_late'][0])/nc92_late_R2)*100.           #late percent of noise ceiling
+    score_percentNC = ((out['score'])/nc92_avg_R2)*100.                       #avg (score) percent of noise ceiling
+    # early_percentNC = ((out['MEG_RDMs_early'][0])/nc78_early_R2)*100.       #early percent of noise ceiling
+    # late_percentNC = ((out['MEG_RDMs_late'][0])/nc78_late_R2)*100.           #late percent of noise ceiling
+    # score_percentNC = ((out['score'])/nc78_avg_R2)*100.                       #avg (score) percent of noise ceiling
     # print('=' * 20)
     # print('MEG results:')
     # print('Squared correlation of model to earlier time interval (R**2): {}'.format(out['MEG_RDMs_early'][0]), ' Percentage of noise ceiling: {}'.format(early_percentNC),'%', '  and significance: {}'.format(out['MEG_RDMs_early'][1]))
     # print('Squared correlation of model to later time interval (R**2): {}'.format(out['MEG_RDMs_late'][0]), '  Percentage of noise ceiling: {}'.format(late_percentNC),'%', '  and significance: {}'.format(out['MEG_RDMs_late'][1]))
     # print('SCORE (average of the two correlations): {}'.format(out['score']), '  Percentage of noise ceiling: {}'.format(score_percentNC),'%')
-    return early_percentNC, late_percentNC
+    return early_percentNC, late_percentNC, score_percentNC
 
 if __name__ == '__main__':
     test_meg_submission()
