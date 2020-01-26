@@ -96,12 +96,15 @@ def test_meg_submission(target_file, submit_file):
     target = load(target_file)
     submit = load(submit_file)
     out = evaluate_meg(submit, target)
-    early_percentNC = ((out['MEG_RDMs_early'][0])/nc92_early_R2)*100.       #early percent of noise ceiling
-    late_percentNC = ((out['MEG_RDMs_late'][0])/nc92_late_R2)*100.           #late percent of noise ceiling
-    score_percentNC = ((out['score'])/nc92_avg_R2)*100.                       #avg (score) percent of noise ceiling
-    # early_percentNC = ((out['MEG_RDMs_early'][0])/nc78_early_R2)*100.       #early percent of noise ceiling
-    # late_percentNC = ((out['MEG_RDMs_late'][0])/nc78_late_R2)*100.           #late percent of noise ceiling
-    # score_percentNC = ((out['score'])/nc78_avg_R2)*100.                       #avg (score) percent of noise ceiling
+    # early_percentNC = ((out['MEG_RDMs_early'][0])/nc92_early_R2)*100.       #early percent of noise ceiling
+    # late_percentNC = ((out['MEG_RDMs_late'][0])/nc92_late_R2)*100.           #late percent of noise ceiling
+    # score_percentNC = ((out['score'])/nc92_avg_R2)*100.                       #avg (score) percent of noise ceiling
+    # early_percentNC = ((out['MEG_RDMs_early'][0])/nc118_early_R2)*100.       #early percent of noise ceiling
+    # late_percentNC = ((out['MEG_RDMs_late'][0])/nc118_late_R2)*100.           #late percent of noise ceiling
+    # score_percentNC = ((out['score'])/nc118_avg_R2)*100.                       #avg (score) percent of noise ceiling
+    early_percentNC = ((out['MEG_RDMs_early'][0])/nc78_early_R2)*100.       #early percent of noise ceiling
+    late_percentNC = ((out['MEG_RDMs_late'][0])/nc78_late_R2)*100.           #late percent of noise ceiling
+    score_percentNC = ((out['score'])/nc78_avg_R2)*100.                       #avg (score) percent of noise ceiling
     # print('=' * 20)
     # print('MEG results:')
     # print('Squared correlation of model to earlier time interval (R**2): {}'.format(out['MEG_RDMs_early'][0]), ' Percentage of noise ceiling: {}'.format(early_percentNC),'%', '  and significance: {}'.format(out['MEG_RDMs_early'][1]))

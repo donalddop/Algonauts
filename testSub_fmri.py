@@ -102,12 +102,15 @@ def test_fmri_submission(target_file, submit_file):
     # out returns a dict with the scores of EVC, IT and combined score
     out = evaluate(submit, target)
     # print(out)
-    evc_percentNC = ((out['EVC_RDMs'][0])/nc92_EVC_R2)*100.      #evc percent of noise ceiling
-    it_percentNC = ((out['IT_RDMs'][0])/nc92_IT_R2)*100.         #it percent of noise ceiling
-    score_percentNC = ((out['score'])/nc92_avg_R2)*100.      #avg (score) percent of noise ceiling
-    # evc_percentNC = ((out['EVC_RDMs'][0])/nc78_EVC_R2)*100.      #evc percent of noise ceiling
-    # it_percentNC = ((out['IT_RDMs'][0])/nc78_IT_R2)*100.         #it percent of noise ceiling
-    # score_percentNC = ((out['score'])/nc78_avg_R2)*100.      #avg (score) percent of noise ceiling
+    # evc_percentNC = ((out['EVC_RDMs'][0])/nc92_EVC_R2)*100.      #evc percent of noise ceiling
+    # it_percentNC = ((out['IT_RDMs'][0])/nc92_IT_R2)*100.         #it percent of noise ceiling
+    # score_percentNC = ((out['score'])/nc92_avg_R2)*100.      #avg (score) percent of noise ceiling
+    # evc_percentNC = ((out['EVC_RDMs'][0])/nc118_EVC_R2)*100.      #evc percent of noise ceiling
+    # it_percentNC = ((out['IT_RDMs'][0])/nc118_IT_R2)*100.         #it percent of noise ceiling
+    # score_percentNC = ((out['score'])/nc118_avg_R2)*100.      #avg (score) percent of noise ceiling
+    evc_percentNC = ((out['EVC_RDMs'][0])/nc78_EVC_R2)*100.      #evc percent of noise ceiling
+    it_percentNC = ((out['IT_RDMs'][0])/nc78_IT_R2)*100.         #it percent of noise ceiling
+    score_percentNC = ((out['score'])/nc78_avg_R2)*100.      #avg (score) percent of noise ceiling
     # print('=' * 20)
     # print('fMRI results:')
     # print('Squared correlation of model to EVC (R**2): {}'.format(out['EVC_RDMs'][0]), ' Percentage of noise ceiling: {}'.format(evc_percentNC),'%', '  and significance: {}'.format(out['EVC_RDMs'][1]))

@@ -3,12 +3,15 @@ from torch.utils.data import Dataset, DataLoader
 import torchvision
 from torchvision import transforms, utils, datasets
 from skimage import feature
+from skimage.transform import resize
 from scipy.ndimage import gaussian_filter
 from scipy.spatial.distance import squareform
 from scipy import io, stats
 from sklearn.naive_bayes import GaussianNB
+from sklearn.model_selection import KFold, LeaveOneOut
 from PIL import Image
 from itertools import combinations, product
+import imageio
 
 import testSub_fmri
 import testSub_meg
@@ -73,9 +76,9 @@ def plot_rdm(rdm):
     plt.show()
 
 def evaluate_rdm(name, folder):
-    em, lm, _ = testSub_meg.test_meg_submission(folder + '/target_meg.mat', name + '_meg.mat')
-    evc, itc, _ = testSub_fmri.test_fmri_submission(folder + '/target_fmri.mat', name + '_fmri.mat')
-    return em, lm, evc, itc
+    em, lm, meg_avg = testSub_meg.test_meg_submission(folder + '/target_meg.mat', name + '_meg.mat')
+    evc, itc, fmri_avg = testSub_fmri.test_fmri_submission(folder + '/target_fmri.mat', name + '_fmri.mat')
+    return (em, lm, evc, itc, meg_avg, fmri_avg)
 
 def evaluate_scores(name, folder):
     em, lm, meg = testSub_meg.test_meg_submission(folder + '/target_meg.mat', name + '_meg.mat')
@@ -85,28 +88,27 @@ def evaluate_scores(name, folder):
 def sq(x):
     return squareform(x, force='tovector', checks=False)
 
-def perceptual_model(dataset, canny_sigma, gauss_sigma, threshold):
+def perceptual_model(image_folder, scale, gauss_sigma, threshold):
     num = 0 # For naming output files
     edges = [] # storing edge detected images
-    # Load training data using dataloader
-    loader = torch.utils.data.DataLoader(dataset, batch_size=32,
-                                                num_workers=4, shuffle=False)
-    # Iterate over all batches
-    for images, labels in loader:
-        # Select an image for edge detection
-        for j in range(len(images)):
-            # Convert image to numpy array
-            im = np.transpose(images[j].numpy(), (1, 2, 0))
-            # Convert rgb to grayscale for edge detection
-            # im = gaussian_filter(im, sigma=gauss_sigma)
-            imgray = np.dot(im[...,:3], [0.299, 0.587, 0.114])
-            # Compute the Canny filter
-            edges_rough = feature.canny(imgray, canny_sigma, low_threshold=threshold)
-            edges_gray = Image.fromarray(edges_rough)
-            edges_smooth = gaussian_filter(edges_gray, sigma=gauss_sigma)
-            # edges_smooth = edges_rough
-            edges.append(edges_smooth)
-            num += 1
+    # Load training data
+    image_files = glob.iglob(image_folder)
+    # Iterate over all images
+    for image in image_files:
+        im = imageio.imread(image)
+        im_resized = resize(im, (scale, scale))
+        # print(im_resized.shape)
+        imgray = np.dot(im_resized[...,:3], [0.299, 0.587, 0.114])
+        edges_rough = feature.canny(imgray, low_threshold=threshold)
+        edges_rough = Image.fromarray(edges_rough)
+        edges_smooth = gaussian_filter(edges_rough, sigma=gauss_sigma)
+        edges.append(edges_smooth)
+        num += 1
+        # plt.imshow(im)
+        # plt.imshow(imgray, cmap='gray')
+        # plt.imshow(edges_rough, cmap='gray')
+        # plt.imshow(edges_smooth, cmap='gray')
+    # plt.show()
     # Create the perceptual RDM using overlapping pixel counts
     rdm = np.zeros((num, num))
     for x in range(num):
@@ -141,8 +143,21 @@ def train_classifier(dnn_data, layer, labels):
     accuracy = (int(X_train.shape[0])-(y_train != y_pred).sum())/int(X_train.shape[0])
     # print("Accuracy: ", accuracy)
     # Train the classifier
-    return gnb.fit(X_train, y_train)
-
+    trained_gnb = gnb.fit(X_train, y_train)
+    # Cross validation
+    # print(np.shape(X_train), np.shape(y_train))
+    #
+    # kf = KFold(n_splits=5)
+    # loo = LeaveOneOut()
+    # scores = []
+    # for train, test in loo.split(X_train):
+    # # for train, test in kf.split(X_train):
+    #     # print(np.shape(X_train[train]), np.shape(X_train[test]))
+    #     y_pred = gnb.fit(X_train[train], y_train[train]).predict(X_train[test])
+    #     accuracy = (sum(y_pred == y_train[test])/len(y_pred))*100
+    #     scores.append(accuracy)
+    # print("Average accuracy: ", sum(scores)/len(scores))
+    return gnb
 
 def categorical_rdm_fmri(fmri_data, trained_classifier, layer, dnn_data, labels):
     # Calculate the categorical 8x8 rdm
@@ -216,58 +231,6 @@ def categorical_rdm_meg(meg_data, trained_classifier, layer, dnn_data, labels):
                 cat_rdm_late[i,j] = 0
     return cat_rdm_early, cat_rdm_late, classifications
 
-# def categorical_rdm(train_folder, test_folder, classifier, layer, dnn_data, labels):
-#     # Load the meg data
-#     meg_training = loadmat(folder + '/target_meg.mat')
-#     meg_early = np.mean(meg_training['MEG_RDMs_early'], axis=(0,1))
-#     meg_late = np.mean(meg_training['MEG_RDMs_late'], axis=(0,1))
-#     # Load the fmri data
-#     fmri_training = loadmat(folder + '/target_fmri.mat')
-#     fmri_itc = np.mean(fmri_training['IT_RDMs'], axis=0)
-#     fmri_evc = np.mean(fmri_training['EVC_RDMs'], axis=0)
-#
-#     # Classify the test set and assign values from the categorical rdm
-#     classifications = []
-#     size = 0
-#     training_files = glob.iglob(dnn_data)
-#     for file in training_files:
-#         current = loadmat(file)
-#         classifications.append(int(classifier.predict(current[layer])))
-#         size += 1
-#
-#     # Loop over all class combinations
-#     meg_early_rdm = np.empty((8,8))
-#     meg_late_rdm = np.empty((8,8))
-#     fmri_itc_rdm = np.empty((8,8))
-#     fmri_evc_rdm = np.empty((8,8))
-#     for i in range(8):
-#         for j in range(8):
-#             # Take the mean of all images in the same category
-#             cat_idx_1 = np.where(labels == i)[0]
-#             cat_idx_2 = np.where(labels == j)[0]
-#             cat_rdm_coords = list(product(cat_idx_1, cat_idx_2))
-#             meg_early_rdm[i,j] = np.mean([meg_early[x] for x in cat_rdm_coords])
-#             meg_late_rdm[i,j] = np.mean([meg_late[x] for x in cat_rdm_coords])
-#             fmri_itc_rdm[i,j] = np.mean([fmri_itc[x] for x in cat_rdm_coords])
-#             fmri_evc_rdm[i,j] = np.mean([fmri_evc[x] for x in cat_rdm_coords])
-#
-#
-#     early, late, itc, evc = (np.empty((size, size)) for i in range(4))
-#     for i in range(size):
-#         for j in range(size):
-#             cat_1 = classifications[i]
-#             cat_2 = classifications[j]
-#             early[i,j] = meg_early_rdm[cat_1, cat_2]
-#             late[i,j] = meg_late_rdm[cat_1, cat_2]
-#             itc[i,j] = fmri_itc_rdm[cat_1, cat_2]
-#             evc[i,j] = fmri_evc_rdm[cat_1, cat_2]
-#             if i == j:
-#                 early[i,j] = 0
-#                 late[i,j] = 0
-#                 itc[i,j] = 0
-#                 evc[i,j] = 0
-#     return early, late, itc, evc, classifications
-
 def dnn_rdm(dnn_data, layer):
     dnn_files = glob.iglob(dnn_data)
     activations = []
@@ -275,8 +238,8 @@ def dnn_rdm(dnn_data, layer):
     for file in dnn_files:
         image = loadmat(file)
         # print(np.shape(image[layer]))
-        activations.append(np.mean(image[layer], axis=0))
-        # activations.append(np.mean(image[layer], axis=(0,1)))
+        activations.append(np.mean(image[layer], axis=0)) # for fc
+        # activations.append(np.mean(image[layer], axis=(0,1))) # for maxpool
         # activations.append(image[layer])
         num_images += 1
     rdm = np.empty((num_images, num_images))
@@ -292,12 +255,8 @@ def dnn_rdm(dnn_data, layer):
             if i == j:
                 rdm[i,j] = 0
     return rdm
-    # print(layer.keys())
-    # avg_layer = np.mean(layer['conv1'], axis=(0,1))
-    # print(np.shape(avg_layer))
-    # stats.spearmanr(a, b=None, axis=0)[source]
 
-def plot_images(folder, labels, title):
+def plot_images(folder, labels, targets, title):
     subs = {
         0 : 'Hands',
         1 : 'Objects-Scenes',
@@ -309,15 +268,16 @@ def plot_images(folder, labels, title):
         7 : 'Fruits-Vegetables',
     }
     fig = plt.figure()
-    images = glob.iglob(folder)
-    images = [x for _,x in sorted(zip(labels,images))]
-    labels_sorted = sorted(labels)
-    labels_sorted = [subs.get(item,item) for item in labels_sorted]
+    images = list(glob.iglob(folder))
+    labels_correct = [i == j for i,j in zip(labels,targets)]
+    labels = [subs.get(item,item) for item in labels]
     for i, file in enumerate(images):
-        sub = fig.add_subplot(10, 8, i + 1)
+        sub = fig.add_subplot(12, 10, i + 1)
         img = plt.imread(file)
         sub.axis('off')
-        sub.set_title(labels_sorted[i], fontsize=8, y=-.28)
+        sub.set_title(labels[i], fontsize=8, y=-.28)
+        if not labels_correct[i]:
+            sub.title.set_color('red')
         sub.imshow(img)
     plt.suptitle(title)
     plt.subplot_tool()
@@ -347,51 +307,79 @@ if __name__ == "__main__":
                                 1,1,4,1,4,1,4,1,4,1,
                                 1,1,7,1,1,1,1,1,1,1,
                                 7,1,1,1,1,1,1,1])
-
-    # # Select the datasets here
+    train_labels_78 = np.array([4,4,5,4,4,4,4,4,4,4,
+                                4,4,4,4,7,1,1,1,1,1,
+                                1,1,1,1,1,1,1,1,1,1,
+                                1,1,1,1,1,1,1,1,1,1,
+                                1,1,1,1,1,1,1,1,1,1,
+                                4,1,2,2,2,2,2,2,2,2,
+                                2,2,2,3,3,3,3,3,3,3,
+                                3,3,3,3,3,3,3,3])
+    # Select the datasets
     training_folder_92 = 'Training_Data/92_Image_Set'
     training_folder_118 = 'Training_Data/118_Image_Set'
     test_folder = 'Test_Data'
-    # load the training and test data
-    train_dataset_92 = load_data(training_folder_92, 100)
+    # Set the folder for training and test images
+    images_92 = 'Training_Data/92_Image_Set/92images/*.jpg'
+    images_118 = 'Training_Data/118_Image_Set/118images/*.jpg'
+    images_78 = 'Test_Data/78images/*.jpg'
+    # Select the training targets
     fmri_target_92 = loadmat(training_folder_92 + '/target_fmri.mat')
     meg_target_92 = loadmat(training_folder_92 + '/target_meg.mat')
-    train_dataset_118 = load_data(training_folder_118, 100)
-    test_dataset = load_data(test_folder, 100)
+    fmri_target_118 = loadmat(training_folder_118 + '/target_fmri.mat')
+    meg_target_118 = loadmat(training_folder_118 + '/target_meg.mat')
 
     ### Perceptual model
 
-    # dataset = load_data(test_folder, int(100))
-    # p_rdm = perceptual_model(train_dataset_92, 2, 1.5, 0.5) # meg 92
-    # # p_rdm = perceptual_model(dataset, 1.5, 1, 0.5) # fmri 92
-    p_rdm = perceptual_model(test_dataset, 1.4, 1, 1) # meg 78
-    # # p_rdm = perceptual_model(dataset, 1.5, 1.5, 1.5) # fmri 78
-    save_rdm(p_rdm, 'p_rdm')
-    # # print(evaluate_scores('p_rdm', training_folder))
-    # print(evaluate_scores('p_rdm', test_folder))
-    # # plot_rdm(p_rdm)
+    # p_rdm = perceptual_model(images_92, 100, 2, 0.3) # meg 92
+    # p_rdm = perceptual_model(images_92, 133, 2, 0.4) # fmri 92
+    # p_rdm = perceptual_model(images_92, 100, 1, .12) # early meg 92 aug
+    # p_rdm = perceptual_model(images_92, 166, 2, .13) # evc fmri 92 aug
+    # p_rdm = perceptual_model(images_78, 100, 2, .3) # meg 78
+    # p_rdm = perceptual_model(images_78, 133, 1.3, .4) # fmri 78
+
+    # print('(em, lm, evc, itc, meg_avg, fmri_avg)')
+    p_rdm_early = perceptual_model(images_78, 100, 2, .4) # meg 78
+    # save_rdm(p_rdm_early, 'p_rdm')
+    # print(evaluate_rdm('p_rdm', test_folder))
+    p_rdm_evc = perceptual_model(images_78, 100, 1, .4) # fmri 78
+    # save_rdm(p_rdm_evc, 'p_rdm')
+    # print(evaluate_rdm('p_rdm', test_folder))
+
+    # # print(evaluate_rdm('p_rdm', training_folder_92))
+    # plot_rdm(p_rdm)
 
     # Optimizing parameters
-
-    # # dataset = load_data(training_folder, int(100))
-    # dataset = load_data(test_folder, int(100))
-    #
-    # meg, fmri = ([] for i in range(2))
+    # em, lm, evc, itc, meg, fmri, params = ([] for i in range(7))
     # # var_range = np.linspace(100,200,11)
-    # var_range = np.linspace(0,5,11)
-    # for t in var_range:
-    #     # dataset = load_data(test_folder, int(t))
-    #     # p_rdm = perceptual_model(dataset, t, 1, 1) # meg
-    #     p_rdm = perceptual_model(dataset, 1.5, 1.5, 1.5) # fmri
+    # scale_range = np.linspace(100,200,4)
+    # sigma_c_range = np.linspace(0,5,6)
+    # sigma_g_range = np.linspace(0,10,11)
+    # threshold_range = np.linspace(0,1,6)
+    # # for s in scale_range:
+    #     # for c in sigma_c_range:
+    # for g in sigma_g_range:
+    # # for t in threshold_range:
+    #     # p_rdm = perceptual_model(images_78, 100, 2, .4) # meg
+    #     p_rdm = perceptual_model(images_78, 100, g, .4) # fmri
     #     save_rdm(p_rdm, 'p_rdm')
-    #     # meg_score, fmri_score = evaluate_scores('p_rdm', training_folder)
-    #     meg_score, fmri_score = evaluate_scores('p_rdm', test_folder)
-    #     meg.append(meg_score)
-    #     fmri.append(fmri_score)
+    #     # scores = evaluate_rdm('p_rdm', training_folder_92)
+    #     scores = evaluate_rdm('p_rdm', test_folder)
+    #     em.append(scores[0])
+    #     lm.append(scores[1])
+    #     evc.append(scores[2])
+    #     itc.append(scores[3])
+    #     meg.append(scores[4])
+    #     fmri.append(scores[5])
+    #     params.append(g)
     #
-    # plot_scores(var_range, meg, fmri,
-    #             'meg', 'fmri', 'Threshold')
-    # plt.show()
+    # # plot_scores(sigma_g_range, em, lm,
+    # #             'Early-MEG', 'Late-MEG', 'Gaussian Sigma, Threshold = .3, Scale = 100')
+    # # plot_scores(sigma_g_range, evc, itc,
+    # #             'EVC-fMRI', 'ITC-fMRI', 'Gaussian Sigma, Threshold = .3, Scale = 100')
+    # # plt.show()
+    # print(params[meg.index(max(meg))], max(meg))
+    # print(params[fmri.index(max(fmri))], max(fmri))
 
     ### Categorical model
 
@@ -405,65 +393,100 @@ if __name__ == "__main__":
     dnn_feats_78 = 'Feature_Extract/feats/78images_feats/vgg/*.mat'
     test_layer = 'fc8'
 
-    # Generate catergorical RDMs
-    # # categorical_rdm_meg(folder, trained_classifier, layer, dnn_data, labels):
-    # cat_rdm_itc, cat_rdm_evc, classifications = categorical_rdm_fmri(training_folder, classifier_92,
-    #                                                 train_layer, dnn_training_92, train_labels_92)
-    # cat_rdm_early, cat_rdm_late, classifications = categorical_rdm_meg(training_folder, classifier_92,
-    #                                                 train_layer, dnn_training_92, train_labels_92)
+    # Estimate categorical RDMs for the 92 set using the 92 classifier
+    # categorical_rdm_meg(training target, trained classifier, training layer, dnn_data, labels):
     # itc, evc, classifications = categorical_rdm_fmri(fmri_target_92, classifier_92,
     #                                                 train_layer, dnn_feats_92, train_labels_92)
     # early, late, classifications = categorical_rdm_meg(meg_target_92, classifier_92,
     #                                                 train_layer, dnn_feats_92, train_labels_92)
-    itc, evc, classifications = categorical_rdm_fmri(fmri_target_92, classifier_92,
-                                                    test_layer, dnn_feats_78, train_labels_92)
-    early, late, classifications = categorical_rdm_meg(meg_target_92, classifier_92,
-                                                    test_layer, dnn_feats_78, train_labels_92)
+    # Estimate categorical RDMs for the 118 set using the 118 classifier
+    # itc, evc, classifications = categorical_rdm_fmri(fmri_target_118, classifier_118,
+    #                                                 train_layer, dnn_feats_118, train_labels_118)
+    # early, late, classifications = categorical_rdm_meg(meg_target_118, classifier_118,
+    #                                                 train_layer, dnn_feats_118, train_labels_118)
+    # Estimate categorical RDMs for the 78 set using the 8x8 RDM based on the 92 set
+    # itc_rdm, evc_rdm, classifications = categorical_rdm_fmri(fmri_target_92, classifier_92,
+    #                                                 test_layer, dnn_feats_78, train_labels_92)
+    # early_rdm, late_rdm, classifications = categorical_rdm_meg(meg_target_92, classifier_92,
+    #                                                 test_layer, dnn_feats_78, train_labels_92)
+    # Estimate categorical RDMs for the 78 set using the 8x8 RDM based on the 118 set
+    itc_rdm, evc_rdm, classifications = categorical_rdm_fmri(fmri_target_118, classifier_118,
+                                                    test_layer, dnn_feats_78, train_labels_118)
+    early_rdm, late_rdm, classifications = categorical_rdm_meg(meg_target_118, classifier_118,
+                                                    test_layer, dnn_feats_78, train_labels_118)
 
-    # # Plotting image sets with labels
+    # Evaluate categorical models
+    # # target_folder = training_folder_92
+    # # target_folder = training_folder_118
+    # target_folder = test_folder
+    # save_rdm(early_rdm, 'cat_rdm_early')
+    # save_rdm(late_rdm, 'cat_rdm_late')
+    # save_rdm(itc_rdm, 'cat_rdm_itc')
+    # save_rdm(evc_rdm, 'cat_rdm_evc')
+    # plot_rdm(itc_rdm)
+
+    # # print('(early, late, evc, itc, meg_avg, fmri_avg)')
+    # # print(evaluate_rdm('cat_rdm_early', target_folder))
+    # print(evaluate_rdm('cat_rdm_late', target_folder))
+    # # print(evaluate_rdm('cat_rdm_evc', target_folder))
+    # print(evaluate_rdm('cat_rdm_itc', target_folder))
+
+    # Plotting image sets with labels
     # folder = 'Training_Data/92_Image_Set/92images/*.jpg'
     # plot_images(folder, classifications, '92 image set')
     # folder = 'Training_Data/118_Image_Set/118images/*.jpg'
-    # plot_images(folder, train_labels_118, '118 image set')
+    # plot_images(folder, train_labels_118, train_labels_118, '118 image set')
     # folder = 'Test_Data/78images/*.jpg'
-    # plot_images(folder, classifications, '78 image set')
-
-    # Evaluate categorical models
-    # target_folder = training_folder_92
-    target_folder = test_folder
-    save_rdm(itc, 'cat_rdm_itc')
-    save_rdm(evc, 'cat_rdm_evc')
-    save_rdm(early, 'cat_rdm_early')
-    save_rdm(late, 'cat_rdm_late')
-    # print(np.shape(early))
-    # print(evaluate_scores('cat_rdm_early', target_folder))
-    # print(evaluate_scores('cat_rdm_late', target_folder))
-    # print(evaluate_scores('cat_rdm_itc', target_folder))
-    # print(evaluate_scores('cat_rdm_evc', target_folder))
+    # plot_images(folder, classifications, train_labels_78, '78 image set')
 
     ### Combining models
 
-    # Create RDM from DNN features
+    # # Create RDM from DNN features
     # rdm_alexnet_conv1 = dnn_rdm('Feature_Extract/feats/92images_feats/vgg/*.mat', 'maxpool5')
-    # save_rdm(rdm_alexnet_conv1, 'dnn_rdm')
-    # rdm_vgg_fc8 = dnn_rdm('Feature_Extract/feats/92images_feats/vgg/*.mat', 'fc8')
+    # rdm_vgg_max5 = dnn_rdm('Feature_Extract/feats/78images_feats/vgg/*.mat', 'maxpool5')
+    # # save_rdm(rdm_alexnet_conv1, 'dnn_rdm')
+    # # rdm_vgg_fc8 = dnn_rdm('Feature_Extract/feats/92images_feats/vgg/*.mat', 'fc8')
     rdm_vgg_fc8 = dnn_rdm('Feature_Extract/feats/78images_feats/vgg/*.mat', 'fc8')
-    save_rdm(rdm_vgg_fc8, 'dnn_rdm')
-    # print(evaluate_rdm('dnn_rdm', training_folder_92))
+    # rdm_alexnet_fc8 = dnn_rdm('Feature_Extract/feats/78images_feats/alexnet/*.mat', 'fc8')
+    # rdm_vgg_fc8 = dnn_rdm('Feature_Extract/feats/78images_feats/vgg/*.mat', 'fc8')
+    # save_rdm(rdm_vgg_fc8, 'dnn_rdm')
+    # # print(evaluate_rdm('dnn_rdm', training_folder_92))
 
-    # Combine the categorical and perceptual model
-    meg, fmri = ([] for i in range(2))
+    # Combined initial estimate RDMs
+    c_rdm_early_late = p_rdm_early #
+    c_rdm_evc_late = .7 * p_rdm_early + .3 * late_rdm #
+    c_rdm_early_itc = .7 * p_rdm_early + .3 * itc_rdm #
+    c_rdm_evc_itc = .8 * p_rdm_early + .2 * itc_rdm #
+
+    # # Plot final estimates
+    # final_early_late = .9 * c_rdm_early_late + .1 * rdm_vgg_fc8 #
+    # final_evc_late = .8 * c_rdm_evc_late + .2 * rdm_vgg_fc8 #
+    # final_early_itc = .9 * c_rdm_early_itc + .1 * rdm_vgg_fc8 #
+    # final_evc_itc = .8 * c_rdm_evc_itc + .2 * rdm_vgg_fc8 #
+    # save_rdm(final_evc_itc, 'dnn_rdm')
+    # print(evaluate_rdm('dnn_rdm', test_folder))
+    # plot_rdm(final_evc_itc)
+
+    # Combine models
+    em, lm, evc, itc, meg, fmri, params = ([] for i in range(7))
     var_range = np.linspace(0,1,11)
     for w in var_range:
-        # combined_rdm = (1-w) * p_rdm + w * rdm_alexnet_conv1 # slight boost to meg score at 0.8
-        combined_rdm = (1-w) * p_rdm + w * rdm_vgg_fc8 #
-        # combined_rdm = (1-w) * p_rdm + w * rdm_alexnet_conv1
+        # combined_rdm = (1-w) * p_rdm_evc + w * itc_rdm # slight boost to meg score at 0.8
+        # combined_rdm = (1-w) * c_rdm_early_late + w * rdm_vgg_fc8 #
+        # combined_rdm = (1-w) * c_rdm_early_itc + w * rdm_vgg_fc8 #
+        # combined_rdm = (1-w) * c_rdm_evc_late + w * rdm_vgg_fc8 #
+        combined_rdm = (1-w) * c_rdm_evc_itc + w * rdm_vgg_fc8 #
         save_rdm(combined_rdm, 'combined_rdm')
-        # meg_score, fmri_score = evaluate_scores('combined_rdm', training_folder_92)
-        meg_score, fmri_score = evaluate_scores('combined_rdm', test_folder)
-        meg.append(meg_score)
-        fmri.append(fmri_score)
-
+        scores = evaluate_rdm('combined_rdm', test_folder)
+        em.append(scores[0])
+        lm.append(scores[1])
+        evc.append(scores[2])
+        itc.append(scores[3])
+        meg.append(scores[4])
+        fmri.append(scores[5])
+        params.append(w)
     plot_scores(var_range, meg, fmri,
-                'meg', 'fmri', 'w % of categorical model')
+                'avg MEG score', 'avg fMRI score', '% of CNN model')
     plt.show()
+    print(params[meg.index(max(meg))], max(meg), fmri[meg.index(max(meg))])
+    print(params[fmri.index(max(fmri))], max(fmri), meg[fmri.index(max(fmri))])
