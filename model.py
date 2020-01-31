@@ -449,44 +449,45 @@ if __name__ == "__main__":
     rdm_vgg_fc8 = dnn_rdm('Feature_Extract/feats/78images_feats/vgg/*.mat', 'fc8')
     # rdm_alexnet_fc8 = dnn_rdm('Feature_Extract/feats/78images_feats/alexnet/*.mat', 'fc8')
     # rdm_vgg_fc8 = dnn_rdm('Feature_Extract/feats/78images_feats/vgg/*.mat', 'fc8')
-    # save_rdm(rdm_vgg_fc8, 'dnn_rdm')
-    # # print(evaluate_rdm('dnn_rdm', training_folder_92))
+    save_rdm(rdm_vgg_fc8, 'dnn_rdm')
+    plot_rdm(rdm_vgg_fc8)
+    print(evaluate_rdm('dnn_rdm', test_folder))
 
-    # Combined initial estimate RDMs
-    c_rdm_early_late = p_rdm_early #
-    c_rdm_evc_late = .7 * p_rdm_early + .3 * late_rdm #
-    c_rdm_early_itc = .7 * p_rdm_early + .3 * itc_rdm #
-    c_rdm_evc_itc = .8 * p_rdm_early + .2 * itc_rdm #
+    # # Combined initial estimate RDMs
+    # c_rdm_early_late = p_rdm_early #
+    # c_rdm_early_itc = .7 * p_rdm_early + .3 * itc_rdm #
+    # c_rdm_evc_late =  p_rdm_evc #
+    # c_rdm_evc_itc = .8 * p_rdm_evc + .2 * itc_rdm #
 
-    # # Plot final estimates
+    # # # Plot final estimates
     # final_early_late = .9 * c_rdm_early_late + .1 * rdm_vgg_fc8 #
-    # final_evc_late = .8 * c_rdm_evc_late + .2 * rdm_vgg_fc8 #
     # final_early_itc = .9 * c_rdm_early_itc + .1 * rdm_vgg_fc8 #
+    # final_evc_late = .1 * c_rdm_evc_late + .1 * rdm_vgg_fc8 #
     # final_evc_itc = .8 * c_rdm_evc_itc + .2 * rdm_vgg_fc8 #
-    # save_rdm(final_evc_itc, 'dnn_rdm')
+    # save_rdm(final_early_itc, 'dnn_rdm')
     # print(evaluate_rdm('dnn_rdm', test_folder))
-    # plot_rdm(final_evc_itc)
+    # # plot_rdm(final_evc_itc)
 
-    # Combine models
-    em, lm, evc, itc, meg, fmri, params = ([] for i in range(7))
-    var_range = np.linspace(0,1,11)
-    for w in var_range:
-        # combined_rdm = (1-w) * p_rdm_evc + w * itc_rdm # slight boost to meg score at 0.8
-        # combined_rdm = (1-w) * c_rdm_early_late + w * rdm_vgg_fc8 #
-        # combined_rdm = (1-w) * c_rdm_early_itc + w * rdm_vgg_fc8 #
-        # combined_rdm = (1-w) * c_rdm_evc_late + w * rdm_vgg_fc8 #
-        combined_rdm = (1-w) * c_rdm_evc_itc + w * rdm_vgg_fc8 #
-        save_rdm(combined_rdm, 'combined_rdm')
-        scores = evaluate_rdm('combined_rdm', test_folder)
-        em.append(scores[0])
-        lm.append(scores[1])
-        evc.append(scores[2])
-        itc.append(scores[3])
-        meg.append(scores[4])
-        fmri.append(scores[5])
-        params.append(w)
-    plot_scores(var_range, meg, fmri,
-                'avg MEG score', 'avg fMRI score', '% of CNN model')
-    plt.show()
-    print(params[meg.index(max(meg))], max(meg), fmri[meg.index(max(meg))])
-    print(params[fmri.index(max(fmri))], max(fmri), meg[fmri.index(max(fmri))])
+    # # Combine models
+    # em, lm, evc, itc, meg, fmri, params = ([] for i in range(7))
+    # var_range = np.linspace(0,1,11)
+    # for w in var_range:
+    #     # combined_rdm = (1-w) * p_rdm_evc + w * itc_rdm # slight boost to meg score at 0.8
+    #     # combined_rdm = (1-w) * c_rdm_early_late + w * rdm_vgg_fc8 #
+    #     # combined_rdm = (1-w) * c_rdm_early_itc + w * rdm_vgg_fc8 #
+    #     combined_rdm = (1-w) * c_rdm_evc_itc + w * rdm_vgg_fc8 #
+    #     # combined_rdm = (1-w) * p_rdm_early + w * late_rdm #
+    #     save_rdm(combined_rdm, 'combined_rdm')
+    #     scores = evaluate_rdm('combined_rdm', test_folder)
+    #     em.append(scores[0])
+    #     lm.append(scores[1])
+    #     evc.append(scores[2])
+    #     itc.append(scores[3])
+    #     meg.append(scores[4])
+    #     fmri.append(scores[5])
+    #     params.append(w)
+    # print(params[meg.index(max(meg))], max(meg), fmri[meg.index(max(meg))])
+    # print(params[fmri.index(max(fmri))], max(fmri), meg[fmri.index(max(fmri))])
+    # # plot_scores(var_range, meg, fmri,
+    # # 'avg MEG score', 'avg fMRI score', '% of Cat. model')
+    # # plt.show()
